@@ -1,4 +1,4 @@
-﻿# Logs
+# Logs
 *.log
 npm-debug.log*
 yarn-error.log*
@@ -29,3 +29,7 @@ backend/.pytest_cache/
 # Environment Variables
 .env
 .env.*
+
+# Presentation Files
+*presentation_guide*
+~$*
