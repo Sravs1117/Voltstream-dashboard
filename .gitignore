@@ -1,0 +1,31 @@
+﻿# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.eslintcache
+
+# Backend (Python)
+backend/__pycache__/
+backend/*.py[cod]
+backend/*.class
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.pytest_cache/
+
+# Environment Variables
+.env
+.env.*

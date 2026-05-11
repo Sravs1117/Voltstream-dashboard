@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Environment Variables
+.env
+*.env
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests and Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker build files
+Dockerfile
+.dockerignore
