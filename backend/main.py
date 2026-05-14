@@ -1,12 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from core.config import settings
 from api.api import api_router
+# from services.rag_service import rag_service
 
 # ─── Initialize FastAPI ───────────────────────────────────────────
-app = FastAPI(title=settings.app_name, version=settings.version)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize RAG service on startup
+    # rag_service.initialize()
+    pass
+    yield
+
+app = FastAPI(title=settings.app_name, version=settings.version, lifespan=lifespan)
 
 # ─── CORS Configuration ──────────────────────────────────────────
 app.add_middleware(

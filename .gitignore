@@ -18,9 +18,9 @@ frontend/dist-ssr/
 frontend/.eslintcache
 
 # Backend (Python)
-backend/__pycache__/
-backend/*.py[cod]
-backend/*.class
+**/__pycache__/
+**/*.py[cod]
+**/*.class
 backend/venv/
 backend/.venv/
 backend/env/
@@ -29,7 +29,12 @@ backend/.pytest_cache/
 # Environment Variables
 .env
 .env.*
+*.env
 
-# Presentation Files
+# Presentation & Documentation Files
 *presentation_guide*
+*.md
 ~$*
+
+# Data files
+backend/data/

@@ -32,6 +32,18 @@ export const api = {
 
   // Billing
   getBillingSummary: () => apiClient.get('/billing/summary'),
+
+  // Chat
+  sendMessage: (message, pdfFile = null) => {
+    const formData = new FormData();
+    formData.append('message', message);
+    if (pdfFile) {
+      formData.append('pdf', pdfFile);
+    }
+    return apiClient.post('/chat/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export default api;
