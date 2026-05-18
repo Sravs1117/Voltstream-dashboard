@@ -114,7 +114,7 @@ class GeminiService:
         except Exception as e:
             raise ValueError(f"PDF extraction failed: {e}") from e
 
-    def chat(self, message: str, history: Optional[List[Dict[str, str]]] = None, pdf_context: Optional[str] = None) -> str:
+    def chat(self, message: str, history: Optional[List[Dict[str, str]]] = None, pdf_context: Optional[str] = None, page_context: Optional[str] = None) -> str:
         """
         Sends message to Gemini with system instructions and chat history.
         history format: [{"role": "user", "text": "..."}, {"role": "bot", "text": "..."}]
@@ -131,8 +131,10 @@ class GeminiService:
 
         # Add the current message
         current_text = message
+        if page_context:
+            current_text = f"--- ACTIVE PAGE CONTEXT ---\n{page_context}\n--- END PAGE CONTEXT ---\n\n{current_text}"
         if pdf_context:
-            current_text = f"--- PDF CONTEXT ---\n{pdf_context[:20000]}\n--- END PDF ---\n\n{message}"
+            current_text = f"--- PDF CONTEXT ---\n{pdf_context[:20000]}\n--- END PDF ---\n\n{current_text}"
 
         try:
             # FIX: Updated model string to a valid, active production identifier

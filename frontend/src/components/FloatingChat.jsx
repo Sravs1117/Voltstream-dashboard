@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { X, Send, Loader2, Zap, ChevronDown, BookOpen, BrainCircuit, MessageCircle } from 'lucide-react';
 import axios from 'axios';
 
@@ -22,8 +23,8 @@ const makeWelcome = () => ({
 
 const MODE = {
   ai: {
-    label: 'Normal AI',
-    toggleLabel: 'Rag Q&A',
+    label: 'Chat AI',
+    toggleLabel: 'AI Assistant',
     ToggleIcon: BookOpen,
     banner: '🧠 Chat Mode — Gemini AI, answers anything',
     bannerClass: 'bg-violet-950/40 text-violet-400',
@@ -32,13 +33,13 @@ const MODE = {
     badgeClass: 'bg-violet-900/40 text-violet-300 border-violet-500/30',
   },
   rag: {
-    label: 'Rag Q&A',
-    toggleLabel: 'Chat',
+    label: 'AI Assistant',
+    toggleLabel: 'Chat AI',
     ToggleIcon: BrainCircuit,
-    banner: '📚 Rag Q&A Mode — strict answers from documents',
+    banner: '📚 AI Assistant Mode — strict answers from documents',
     bannerClass: 'bg-cyan-950/40 text-cyan-400',
     placeholder: 'Ask about Voltstream...',
-    badge: '📚 RAG · Documents',
+    badge: '📚 AI Assistant · Documents',
     badgeClass: 'bg-cyan-900/40 text-cyan-300 border-cyan-500/30',
   },
 };
@@ -91,16 +92,6 @@ function Bubble({ msg }) {
     >
       {isUser ? <UserAvatar /> : <BotAvatar />}
       <div className={`max-w-[80%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-        {/* Source chips */}
-        {!isUser && msg.sources?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-1">
-            {msg.sources.map((s) => (
-              <span key={s} className="text-[9px] bg-cyan-900/30 text-cyan-400 border border-cyan-500/20 rounded-full px-2 py-0.5">
-                📄 {s}
-              </span>
-            ))}
-          </div>
-        )}
         {/* Bubble */}
         <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-md whitespace-pre-wrap ${isUser
           ? 'bg-gradient-to-br from-cyan-500 to-cyan-700 text-white rounded-br-none'
@@ -119,6 +110,7 @@ function Bubble({ msg }) {
 // ─── Main Widget ──────────────────────────────────────────────────────────────
 
 export default function FloatingChat() {
+  const location = useLocation();
   const [aiHistory, setAiHistory] = useState([makeWelcome()]);
   const [ragHistory, setRagHistory] = useState([makeWelcome()]);
   const [mode, setMode] = useState('ai');
@@ -177,6 +169,16 @@ export default function FloatingChat() {
           text: m.text
         }));
         formData.append('history', JSON.stringify(historyData));
+
+        // Map the current page name
+        const pathMap = {
+          '/': 'Live Dashboard',
+          '/history': 'Usage History',
+          '/control': 'Smart Control',
+          '/billing': 'Billing & Invoices',
+        };
+        const currentPageName = pathMap[location.pathname] || 'Live Dashboard';
+        formData.append('current_page', currentPageName);
 
         const res = await axios.post(ENDPOINTS.ai, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
