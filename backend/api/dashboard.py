@@ -1,17 +1,23 @@
-from fastapi import APIRouter
-import random
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from schemas.dashboard import LivePowerStatus
+from db.database import get_db
+from db.crud import get_latest_power_reading
 
 router = APIRouter()
 
 @router.get("/live", response_model=LivePowerStatus)
-def get_live_power():
-    """Current grid draw, solar generation, and net usage."""
-    solar = round(random.uniform(2.5, 6.0), 2)
-    grid = round(random.uniform(0.8, 3.5), 2)
-    net = round(grid - solar, 2)
+def get_live_power(db: Session = Depends(get_db)):
+    """Current grid draw, solar generation, and net usage fetched from SQLite database."""
+    reading = get_latest_power_reading(db)
+    if not reading:
+        return LivePowerStatus(
+            grid_draw_kw=0.0,
+            solar_gen_kw=0.0,
+            net_usage_kw=0.0,
+        )
     return LivePowerStatus(
-        grid_draw_kw=grid,
-        solar_gen_kw=solar,
-        net_usage_kw=net,
+        grid_draw_kw=reading.grid_draw_kw,
+        solar_gen_kw=reading.solar_gen_kw,
+        net_usage_kw=reading.net_usage_kw,
     )

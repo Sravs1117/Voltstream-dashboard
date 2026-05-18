@@ -29,6 +29,8 @@ export const api = {
   getDevices: () => apiClient.get('/devices'),
   toggleDevice: (id, isOn) =>
     apiClient.patch(`/devices/${id}`, { is_on: isOn }),
+  addDevice: (device) =>
+    apiClient.post('/devices', device),
 
   // Billing
   getBillingSummary: () => apiClient.get('/billing/summary'),

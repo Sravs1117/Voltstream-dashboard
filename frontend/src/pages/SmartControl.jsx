@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   Zap, Wind, Thermometer, Lightbulb, Tv, 
   Settings2, Clock, RefreshCcw, AlertCircle,
-  Snowflake, Flame, Droplets, Fan, Refrigerator, WashingMachine, Microwave, AirVent, ChefHat
+  Snowflake, Flame, Droplets, Fan, Refrigerator, WashingMachine, Microwave, AirVent, ChefHat, Plus
 } from 'lucide-react';
 import api from '../services/api';
 import useApi from '../hooks/useApi';
@@ -88,10 +88,23 @@ export default function SmartControl() {
   const [isAutomationModalOpen, setIsAutomationModalOpen] = useState(false);
   const [automationRule, setAutomationRule] = useState({ device: '', action: 'off', time: '' });
   const [activeRules, setActiveRules] = useState([]); // Store saved rules
+  
+  const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [newDeviceType, setNewDeviceType] = useState('appliance');
+
+  const [localDevices, setLocalDevices] = useState([]);
 
   useEffect(() => {
     execute();
   }, []);
+
+  // Sync local state when API data arrives
+  useEffect(() => {
+    if (devices) {
+      setLocalDevices(devices?.data || devices || []);
+    }
+  }, [devices]);
 
   // Timer to check and execute automation rules
   useEffect(() => {
@@ -113,13 +126,25 @@ export default function SmartControl() {
     }, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
-  }, [activeRules]);
+  }, [activeRules, localDevices]);
 
   const handleToggle = async (id, newState) => {
+    // 1. Optimistic Update: Update UI immediately
+    setLocalDevices(prev => prev.map(d => 
+      d.id === id ? { ...d, is_on: newState } : d
+    ));
+
     try {
+      // 2. Perform background API call
       await api.toggleDevice(id, newState);
-      execute(); // Refresh list after toggle
+      // We don't call execute() here because it would trigger a global loading skeleton.
+      // The local state is already correct.
     } catch (err) {
+      // 3. Rollback on failure
+      setLocalDevices(prev => prev.map(d => 
+        d.id === id ? { ...d, is_on: !newState } : d
+      ));
+      alert("Failed to update device. Rolling back.");
       console.error("Failed to toggle device:", err);
     }
   };
@@ -140,7 +165,7 @@ export default function SmartControl() {
     e.preventDefault();
     
     // Find the device name for the alert message
-    const deviceName = devices.find(d => d.id === automationRule.device)?.name || 'Unknown Device';
+    const deviceName = localDevices.find(d => d.id === automationRule.device)?.name || 'Unknown Device';
     
     alert(`Automation saved!\n\nDevice: ${deviceName}\nAction: Turn ${automationRule.action}\nTime: ${automationRule.time}`);
     
@@ -151,9 +176,25 @@ export default function SmartControl() {
     setAutomationRule({ device: '', action: 'off', time: '' });
   };
 
-  const deviceList = devices?.data || devices || [];
+  const handleAddDevice = async (e) => {
+    e.preventDefault();
+    const name = newDeviceName.trim();
+    if (!name) return;
 
-const filteredDevices = deviceList.filter(device =>
+    try {
+      const response = await api.addDevice({ name, type: newDeviceType });
+      const newDev = response.data;
+      setLocalDevices(prev => [...prev, newDev]);
+      setIsAddDeviceModalOpen(false);
+      setNewDeviceName('');
+      setNewDeviceType('appliance');
+    } catch (err) {
+      alert("Failed to add new device. Please try again.");
+      console.error("Failed to add device:", err);
+    }
+  };
+
+  const filteredDevices = localDevices.filter(device =>
     device.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     device.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -171,6 +212,9 @@ const filteredDevices = deviceList.filter(device =>
           </button>
           <button onClick={handleAutomationClick} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-gray-200">
             <Settings2 size={16} /> Automation
+          </button>
+          <button onClick={() => setIsAddDeviceModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-100">
+            <Plus size={16} /> Add Device
           </button>
         </div>
       </div>
@@ -191,7 +235,7 @@ const filteredDevices = deviceList.filter(device =>
                   required
                 >
                   <option value="">-- Choose a device --</option>
-                  {devices?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {localDevices?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
 
@@ -233,6 +277,61 @@ const filteredDevices = deviceList.filter(device =>
                   className="flex-1 py-3 text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-lg shadow-emerald-200 transition-colors"
                 >
                   Save Rule
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isAddDeviceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-xl font-extrabold text-gray-900 mb-2">Add Smart Device</h2>
+            <p className="text-sm text-gray-500 mb-6">Register a new home appliance to your smart grid dashboard.</p>
+            
+            <form onSubmit={handleAddDevice} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Device Name</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Guest Room AC, Study Lights"
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-emerald-500"
+                  value={newDeviceName}
+                  onChange={(e) => setNewDeviceName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Device Type</label>
+                <select 
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-emerald-500"
+                  value={newDeviceType}
+                  onChange={(e) => setNewDeviceType(e.target.value)}
+                  required
+                >
+                  <option value="hvac">HVAC / Air Conditioning</option>
+                  <option value="appliance">Appliance / General Smart Plug</option>
+                  <option value="lighting">Lighting / Smart Bulb</option>
+                  <option value="entertainment">Entertainment / TV & Audio</option>
+                  <option value="kitchen">Kitchen / Oven & Fridge</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-6">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddDeviceModalOpen(false)}
+                  className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 py-3 text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-lg shadow-emerald-200 transition-colors"
+                >
+                  Add Appliance
                 </button>
               </div>
             </form>

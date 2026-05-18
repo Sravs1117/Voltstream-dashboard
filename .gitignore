@@ -33,8 +33,12 @@ backend/.pytest_cache/
 
 # Presentation & Documentation Files
 *presentation_guide*
-*.md
-~$*
+# We allow tracking of markdown documents (.md) except temp ones
+!*.md
 
 # Data files
 backend/data/
+
+# Database & Vector Store
+backend/voltstream.db
+backend/db/chroma_db/

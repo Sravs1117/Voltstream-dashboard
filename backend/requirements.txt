@@ -1,9 +1,33 @@
+# ── VoltStream Dashboard — Python Dependencies ──────────────────────────────
+#
+# Install all dependencies:
+#   pip install -r requirements.txt
+#
+# ── Core Web Framework ────────────────────────────────────────────────────────
 fastapi==0.136.1
 uvicorn[standard]==0.46.0
-langchain
-langchain-community
-langchain-google-genai
-langchain-text-splitters
-chromadb
-sentence-transformers
-pypdf
+python-multipart        # Required for Form/File uploads in FastAPI
+
+# ── Environment & Config ──────────────────────────────────────────────────────
+python-dotenv           # Loads .env variables
+
+# ── LangChain Stack ───────────────────────────────────────────────────────────
+langchain               # Core LangChain abstractions
+langchain-community     # PyPDFLoader, Chroma, HuggingFaceEmbeddings
+langchain-google-genai  # Gemini 1.5 Flash LLM wrapper
+langchain-text-splitters  # RecursiveCharacterTextSplitter
+langchain-core          # LCEL primitives (RunnablePassthrough, StrOutputParser)
+
+# ── Vector Database ───────────────────────────────────────────────────────────
+chromadb                # ChromaDB vector store
+
+# ── Embeddings ────────────────────────────────────────────────────────────────
+sentence-transformers   # all-MiniLM-L6-v2 embedding model
+
+# ── PDF Handling ──────────────────────────────────────────────────────────────
+pypdf                   # PDF text extraction (used by PyPDFLoader)
+pymupdf                 # PyMuPDF — used by GeminiService for ad-hoc PDF parsing
+
+# ── Google Generative AI ──────────────────────────────────────────────────────
+google-genai            # NEW Gemini SDK — supports v1 API + gemini-2.5-flash (replaces google-generativeai)
+google-generativeai     # Kept for LangChain langchain-google-genai compatibility

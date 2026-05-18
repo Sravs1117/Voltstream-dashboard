@@ -9,3 +9,7 @@ class DeviceResponse(BaseModel):
 
 class DeviceUpdate(BaseModel):
     is_on: bool
+
+class DeviceCreate(BaseModel):
+    name: str
+    type: str
