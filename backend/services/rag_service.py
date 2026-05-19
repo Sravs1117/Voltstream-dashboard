@@ -118,7 +118,7 @@ class RAGService:
             }
 
         try:
-            retriever = self._vector_store.as_retriever(search_kwargs={"k": 3})
+            retriever = self._vector_store.as_retriever(search_kwargs={"k": 4})
             source_docs = retriever.invoke(query)
 
             answer = self._rag_chain.invoke(query)
@@ -216,7 +216,7 @@ class RAGService:
 
     def _build_rag_chain(self) -> None:
         """Constructs the LCEL RAG chain: retriever → prompt → LLM → parser."""
-        retriever = self._vector_store.as_retriever(search_kwargs={"k": 5})
+        retriever = self._vector_store.as_retriever(search_kwargs={"k": 4})
         prompt = PromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
 
         def _format_docs(docs) -> str:
