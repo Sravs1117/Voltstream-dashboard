@@ -2,14 +2,15 @@ import asyncio
 import logging
 import random
 from sqlalchemy.orm import Session
-from db.database import SessionLocal
-from db.crud import fluctuate_active_devices_power, add_power_reading, get_devices
+from core.database import SessionLocal
+from db.crud import fluctuate_active_devices_power, get_devices
+from db.crud import add_power_reading
 
 logger = logging.getLogger(__name__)
 
 class TelemetryService:
     """Simulates real-time solar generation and grid telemetry, storing readings in the SQLite database."""
-    
+
     def __init__(self):
         self._running = False
         self._task = None
@@ -51,7 +52,7 @@ class TelemetryService:
 
                     # 5. Save the reading to the database
                     add_power_reading(db, grid_draw_kw=grid, solar_gen_kw=solar)
-                    
+
                 except Exception as e:
                     logger.error(f"❌ Error in telemetry simulation: {e}")
                 finally:

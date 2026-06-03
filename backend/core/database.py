@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Database URL for SQLite (creates a file 'voltstream.db' in the backend directory)
-DATABASE_URL = "sqlite:///./voltstream.db"
+DATABASE_URL = "sqlite:///./db/voltstream.db"
 
 # Create the SQLite engine
 # connect_args={"check_same_thread": False} is required for SQLite to support multi-threading in FastAPI

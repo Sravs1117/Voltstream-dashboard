@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 import random
-from schemas.analytics import AnalyticsResponse, EnergyDataPoint
+from schemas import AnalyticsResponse, EnergyDataPoint
 
 router = APIRouter()
 

@@ -46,6 +46,10 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Multi-Agent Insights (Usage History page)
+  runInsights: (prompt, period = 'weekly') =>
+    apiClient.post('/insights/', { prompt, period, session_id: 'insights_session' }),
 };
 
 export default api;

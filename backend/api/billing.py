@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from schemas.billing import BillingSummary
+from schemas import BillingSummary
 
 router = APIRouter()
 

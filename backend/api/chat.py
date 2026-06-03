@@ -7,32 +7,24 @@ api/chat.py
 
   Fields:
     message : str   (required)
-    pdf     : file  (optional)
 
   Logic:
-    PDF attached → Gemini answers from PDF; if not found, falls back to general knowledge.
-    No PDF       → Gemini answers directly from general knowledge.
+    Gemini answers directly from general knowledge.
 
   NEVER returns "I don't have that information."
   That response is strictly reserved for /api/v1/qa.
 """
 
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
+import json
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
-
-from schemas.chat import ChatResponse
-from services.gemini_service import gemini_service
+from fastapi import APIRouter, Form, HTTPException, status
+from schemas import ChatResponse
+from agents.gemini import gemini_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-_MAX_PDF_SIZE = 10 * 1024 * 1024  # 10 MB
-
-
-import json
-from schemas.chat import ChatResponse, ChatMessage
 
 PAGE_CONTEXTS = {
     "Live Dashboard": (
@@ -57,50 +49,32 @@ PAGE_CONTEXTS = {
     )
 }
 
+def is_simple_greeting(text: str) -> bool:
+    cleaned = "".join(c for c in text.lower() if c.isalnum() or c.isspace()).strip()
+    greetings = {
+        "hi", "hello", "hey", "hola", "greetings", "good morning", 
+        "good afternoon", "good evening", "hi there", "hello there",
+        "hey there", "yo", "sup"
+    }
+    return cleaned in greetings
+
 @router.post(
     "/",
     response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     summary="General AI chat — always powered by Gemini",
-    description=(
-        "Answers any question using the Gemini API. Supports conversation history for context memory."
-    ),
+    description="Answers any question using the Gemini API. Supports conversation history for context memory.",
     tags=["chat"],
 )
 async def chat_endpoint(
     message: str = Form(..., min_length=1, max_length=2000),
     history: Optional[str] = Form(None, description="JSON string of ChatMessage list"),
-    current_page: Optional[str] = Form(None, description="The name of the active page"),
-    pdf: Optional[UploadFile] = File(None),
+    current_page: Optional[str] = Form(None, description="The name of the active page")
 ) -> ChatResponse:
     """
-    Always uses Gemini. PDF is optional context — never required.
+    Always uses Gemini. No PDF context used here.
     """
-    logger.info("📥 [Chat] message='%s' | pdf=%s | current_page=%s", message[:80], pdf.filename if pdf else None, current_page)
-
-    pdf_context: Optional[str] = None
-    sources: list[str] = []
-
-    # ── Extract PDF text if provided ──────────────────────────────────────────
-    if pdf is not None:
-        if not pdf.filename.lower().endswith(".pdf"):
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Only PDF files are supported.",
-            )
-        pdf_bytes = await pdf.read()
-        if len(pdf_bytes) > _MAX_PDF_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="PDF file exceeds the 10 MB limit.",
-            )
-        try:
-            pdf_context = gemini_service.extract_text_from_pdf(pdf_bytes)
-            if not pdf_context:
-                raise ValueError("PDF appears to be empty or image-only.")
-            sources = [pdf.filename]
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    logger.info("📥 [Chat] message='%s' | current_page=%s", message[:80], current_page)
 
     # ── Parse history if provided ─────────────────────────────────────────────
     parsed_history: List[Dict[str, str]] = []
@@ -113,19 +87,22 @@ async def chat_endpoint(
         except Exception:
             logger.warning("⚠️ Failed to parse history JSON")
 
-    # ── Always call Gemini — with or without PDF context ─────────────────────
+    # ── Always call Gemini ───────────────────────────────────────────────────
     try:
-        page_context = PAGE_CONTEXTS.get(current_page) if current_page else None
+        # Avoid injecting active page context for simple greetings
+        page_context = None
+        if current_page and not is_simple_greeting(message):
+            page_context = PAGE_CONTEXTS.get(current_page)
+
         answer = gemini_service.chat(
             message=message,
             history=parsed_history,
-            pdf_context=pdf_context,
             page_context=page_context
         )
-        logger.info("📤 [Chat] Gemini answer generated. mode=%s | page_context=%s", "pdf" if pdf_context else "general", bool(page_context))
+        logger.info("📤 [Chat] Gemini answer generated. page_context=%s", bool(page_context))
         return ChatResponse(
             answer=answer,
-            sources=sources,
+            sources=[],
             mode="general",
         )
     except RuntimeError as e:

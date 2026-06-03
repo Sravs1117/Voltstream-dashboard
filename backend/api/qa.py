@@ -13,25 +13,13 @@ No general Gemini knowledge. No hallucination. Pure document retrieval.
 import logging
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from schemas import QARequest, QAResponse
 from typing import List
 
-from services.rag_service import rag_service
+from agents.rag import rag_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-# ─── Schema (local, only for this endpoint) ───────────────────────────────────
-
-class QARequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=2000, description="User question for strict RAG search.")
-
-
-class QAResponse(BaseModel):
-    answer: str = Field(..., description="Grounded answer from indexed documents, or 'I don't have that information.'")
-    sources: List[str] = Field(default_factory=list, description="Source references from ChromaDB.")
-    mode: str = Field(default="rag", description="Always 'rag' for this endpoint.")
-
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from schemas.dashboard import LivePowerStatus
-from db.database import get_db
+from schemas import LivePowerStatus
+from core.database import get_db
 from db.crud import get_latest_power_reading
 
 router = APIRouter()

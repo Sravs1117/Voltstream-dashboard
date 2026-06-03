@@ -20,32 +20,12 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
+
+from core.prompts import RAG_PROMPT_TEMPLATE
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 logger = logging.getLogger(__name__)
-
-# ─── RAG Prompt Template ──────────────────────────────────────────────────────
-RAG_PROMPT_TEMPLATE = """You are VoltStream Bot, a helpful assistant.
-Answer the user's question using the document context provided below.
-
-RULES:
-1. DYNAMIC BREVITY:
-   - For simple greetings (hi, hello), answer in 1-2 lines.
-   - For document questions, answer in maximum 5 lines.
-   - NEVER exceed 5 lines total.
-2. CONTEXT: Use the context for technical questions.
-3. UNKNOWN: If not in context, say "I am VoltStream Bot. I don't have that information, but I can help you with questions about VoltStream Energy Efficiency." and answer only from context.
-4. NO FILLER: Get straight to the point.
-
-
-Context:
-{context}
-
-Question: {question}
-
-Answer:"""
-
 
 class RAGService:
     """
@@ -102,6 +82,24 @@ class RAGService:
         except Exception as exc:
             logger.exception("❌ RAG Service initialization failed: %s", exc)
 
+    # ── Greeting / Small-talk patterns ─────────────────────────────────────────
+    _GREETING_RESPONSES = {
+        frozenset(["hi", "hello", "hey", "hiya", "howdy"]): "Hey there! 👋 I'm VoltStream Bot. Ask me anything about energy saving, solar, or your VoltStream platform!",
+        frozenset(["how are you", "how r u", "how are u", "how do you do"]): "I'm doing great and ready to help! 😊 What energy question can I answer for you?",
+        frozenset(["good morning", "good afternoon", "good evening", "good night"]): "Good day! 🌟 How can I assist you with your energy needs today?",
+        frozenset(["thanks", "thank you", "thx", "ty", "thank u"]): "You're welcome! 😊 Feel free to ask if you have more questions.",
+        frozenset(["bye", "goodbye", "see you", "see ya", "cya"]): "Goodbye! 👋 Come back anytime you have energy questions!",
+        frozenset(["ok", "okay", "alright", "sure", "got it", "noted"]): "Got it! Let me know if there's anything else you need.",
+    }
+
+    def _get_greeting_response(self, query: str) -> str | None:
+        """Returns a canned response if query is a greeting/small-talk, else None."""
+        q = query.strip().lower().rstrip("!?.,'")
+        for keywords, response in self._GREETING_RESPONSES.items():
+            if q in keywords:
+                return response
+        return None
+
     def ask(self, query: str) -> dict:
         """
         Runs the RAG pipeline for a given user query.
@@ -111,9 +109,14 @@ class RAGService:
                 - "answer"  (str): grounded answer or fallback message
                 - "sources" (list[str]): page-level source references
         """
+        # ── Handle greetings & small talk before hitting the PDF ───────────────
+        greeting = self._get_greeting_response(query)
+        if greeting:
+            return {"answer": greeting, "sources": []}
+
         if not self._initialized or not self._rag_chain:
             return {
-                "answer": "I don't have that information.",
+                "answer": "I am the VoltStream Assistant. I don't have that information. I can only assist with energy efficiency document-related information.",
                 "sources": [],
             }
 
@@ -126,7 +129,7 @@ class RAGService:
             # Don't show sources for simple greetings
             lowered_query = query.lower()
             is_greeting = any(g in lowered_query for g in ["hi", "hello", "how are you", "hey", "good morning"])
-            
+
             final_sources = []
             if not is_greeting:
                 final_sources = list(
@@ -198,17 +201,14 @@ class RAGService:
 
     def _init_llm(self) -> None:
         """Initializes the Gemini 2.5 Flash LLM via LangChain."""
-        api_key = os.getenv("GOOGLE_API_KEY", "")
-        if not api_key:
-            raise EnvironmentError(
-                "GOOGLE_API_KEY is not set. Add it to your .env file."
-            )
-        logger.info("🤖 Initializing Gemini 2.5 Flash...")
-        
-        # FIX: Updated model parameter to the current active 'gemini-2.5-flash'
+        from core.config import settings
+        logger.info("🤖 Initializing Gemini 2.5 Flash using Vertex AI...")
+
         self._llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
-            google_api_key=api_key,
+            vertexai=True,
+            project=settings.gcp_project,
+            location=settings.gcp_location,
             temperature=0,
             convert_system_message_to_human=True,
         )
@@ -230,6 +230,40 @@ class RAGService:
         )
         logger.info("⛓️  RAG chain built successfully.")
 
-
 # ── Singleton ─────────────────────────────────────────────────────────────────
 rag_service = RAGService()
+def get_energy_recommendations(query: str) -> list:
+    try:
+        search_q = query.strip() if query else ""
+
+        general_keywords = ["ac", "air conditioner", "fridge", "refrigerator", "washing", "machine", "geyser", "heater", "light", "tv", "television"]
+        is_specific = any(k in search_q.lower() for k in general_keywords)
+
+        if not is_specific:
+            search_q += " energy saving tips reduce electricity consumption peak hours bill reduction"
+
+        rag_result = rag_service.ask(search_q)
+        answer     = rag_result.get("answer", "").strip()
+
+        if not answer or "don't have that information" in answer.lower():
+            return [
+                "Set AC temperature between 24°C and 26°C to reduce cooling costs by up to 20%",
+                "Reduce usage during peak hours (7 PM – 9 PM) — shift loads to off-peak",
+                "Schedule heavy appliances (washing machine, dishwasher) after 10 PM",
+                "Enable smart automation schedules to auto-shutoff idle devices",
+                "Monitor and reduce weekend consumption patterns",
+            ]
+
+        lines = [l.strip() for l in answer.split("\n") if l.strip() and len(l.strip()) > 10]
+        recommendations = [l.lstrip("•-*1234567890.) ") for l in lines]
+        return recommendations[:7]
+
+    except Exception as e:
+        logger.exception("[RAG Tool] error: %s", e)
+        return [
+            "Set AC to 24–26°C",
+            "Run appliances during off-peak hours (10 PM – 6 AM)",
+            "Switch to LED lighting",
+            "Use smart power strips to eliminate standby load",
+            "Enable device scheduling via VoltStream automation",
+        ]

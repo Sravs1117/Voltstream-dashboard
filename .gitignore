@@ -41,4 +41,8 @@ backend/data/
 
 # Database & Vector Store
 backend/voltstream.db
+backend/db/*.db
 backend/db/chroma_db/
+
+# Google Cloud Credentials
+backend/project-*.json

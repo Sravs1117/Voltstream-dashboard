@@ -11,6 +11,7 @@ class Settings:
         "http://127.0.0.1:5173",
         "https://voltstream-2c5fe.web.app"
     ]
-    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    gcp_project: str = os.getenv("GOOGLE_CLOUD_PROJECT", "project-8f12ea6a-1eb5-4330-a3b")
+    gcp_location: str = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 settings = Settings()
