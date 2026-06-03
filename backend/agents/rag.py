@@ -21,6 +21,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 
+from backend.core.config import Settings
 from core.prompts import RAG_PROMPT_TEMPLATE
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -82,24 +83,6 @@ class RAGService:
         except Exception as exc:
             logger.exception("❌ RAG Service initialization failed: %s", exc)
 
-    # ── Greeting / Small-talk patterns ─────────────────────────────────────────
-    _GREETING_RESPONSES = {
-        frozenset(["hi", "hello", "hey", "hiya", "howdy"]): "Hey there! 👋 I'm VoltStream Bot. Ask me anything about energy saving, solar, or your VoltStream platform!",
-        frozenset(["how are you", "how r u", "how are u", "how do you do"]): "I'm doing great and ready to help! 😊 What energy question can I answer for you?",
-        frozenset(["good morning", "good afternoon", "good evening", "good night"]): "Good day! 🌟 How can I assist you with your energy needs today?",
-        frozenset(["thanks", "thank you", "thx", "ty", "thank u"]): "You're welcome! 😊 Feel free to ask if you have more questions.",
-        frozenset(["bye", "goodbye", "see you", "see ya", "cya"]): "Goodbye! 👋 Come back anytime you have energy questions!",
-        frozenset(["ok", "okay", "alright", "sure", "got it", "noted"]): "Got it! Let me know if there's anything else you need.",
-    }
-
-    def _get_greeting_response(self, query: str) -> str | None:
-        """Returns a canned response if query is a greeting/small-talk, else None."""
-        q = query.strip().lower().rstrip("!?.,'")
-        for keywords, response in self._GREETING_RESPONSES.items():
-            if q in keywords:
-                return response
-        return None
-
     def ask(self, query: str) -> dict:
         """
         Runs the RAG pipeline for a given user query.
@@ -109,14 +92,9 @@ class RAGService:
                 - "answer"  (str): grounded answer or fallback message
                 - "sources" (list[str]): page-level source references
         """
-        # ── Handle greetings & small talk before hitting the PDF ───────────────
-        greeting = self._get_greeting_response(query)
-        if greeting:
-            return {"answer": greeting, "sources": []}
-
         if not self._initialized or not self._rag_chain:
             return {
-                "answer": "I am the VoltStream Assistant. I don't have that information. I can only assist with energy efficiency document-related information.",
+                "answer": "I don't have that information.",
                 "sources": [],
             }
 
@@ -201,14 +179,14 @@ class RAGService:
 
     def _init_llm(self) -> None:
         """Initializes the Gemini 2.5 Flash LLM via LangChain."""
-        from core.config import settings
         logger.info("🤖 Initializing Gemini 2.5 Flash using Vertex AI...")
 
+        # FIX: Updated model parameter to the current active 'gemini-2.5-flash'
         self._llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             vertexai=True,
-            project=settings.gcp_project,
-            location=settings.gcp_location,
+            project=Settings.gcp_project,
+            location=Settings.gcp_location,
             temperature=0,
             convert_system_message_to_human=True,
         )
