@@ -226,8 +226,13 @@ const MultiAgentPanel = ({ period }) => {
   const [agentStep, setAgentStep]   = useState('idle'); // idle | orchestrating | analysing | advising | done
   const [reply, setReply]           = useState(null);   // { text, ok }
   const [trace, setTrace]           = useState('');
+  const [liveTraceSteps, setLiveTraceSteps] = useState([]);
+  const [chunks, setChunks]         = useState([]);
   const [intent, setIntent]         = useState(null);   // { usage, advice }
   const [traceOpen, setTraceOpen]   = useState(false);
+  const [chunksOpen, setChunksOpen] = useState(false);
+  const [evaluation, setEvaluation] = useState(null);
+  const [evalOpen, setEvalOpen]     = useState(true);
   const inputRef                    = useRef(null);
 
   // Derive per-node states from agentStep + actual intent
@@ -256,13 +261,41 @@ const MultiAgentPanel = ({ period }) => {
     setLoading(true);
     setReply(null);
     setTrace('');
+    setLiveTraceSteps(["🧠 Orchestrator Agent — analyzing intent..."]);
+    setChunks([]);
+    setChunksOpen(false);
     setIntent(null);
-    setTraceOpen(false);
+    setTraceOpen(true); // Open the trace by default so they see steps one-by-one!
+    setEvaluation(null);
+    setEvalOpen(false); // Closed initially
     setAgentStep('orchestrating');
 
     // Timers to animate the step nodes progressively while waiting
     const t1 = setTimeout(() => setAgentStep('analysing'), 1000);
     const t2 = setTimeout(() => setAgentStep('advising'), 2400);
+
+    // Timers to progressively add trace steps to liveTraceSteps
+    const stepTimers = [];
+    // Removed 'energy' from isUsage because it incorrectly triggered Analyst fake trace on 'energy-saving'
+    const isUsage = /usage|cost|bill|spend|rate|consumption|device/i.test(prompt);
+    const isAdvice = /tip|save|advice|reduce|ground|heat|cool|solar/i.test(prompt) || !isUsage;
+
+    if (isUsage && isAdvice) {
+      stepTimers.push(setTimeout(() => {
+        setLiveTraceSteps(prev => [...prev, "📊 Analyst Agent — calling tool: get_usage_data()", "  ↳ Querying VoltStream SQLite database..."]);
+      }, 1000));
+      stepTimers.push(setTimeout(() => {
+        setLiveTraceSteps(prev => [...prev, "💡 Advisor Agent — calling tool: search_energy_knowledge()", "  ↳ Searching PDF knowledge base via ChromaDB..."]);
+      }, 2400));
+    } else if (isUsage) {
+      stepTimers.push(setTimeout(() => {
+        setLiveTraceSteps(prev => [...prev, "📊 Analyst Agent — calling tool: get_usage_data()", "  ↳ Querying VoltStream SQLite database..."]);
+      }, 1500));
+    } else {
+      stepTimers.push(setTimeout(() => {
+        setLiveTraceSteps(prev => [...prev, "💡 Advisor Agent — calling tool: search_energy_knowledge()", "  ↳ Searching PDF knowledge base via ChromaDB..."]);
+      }, 1500));
+    }
 
     try {
       const res = await fetch(`${INSIGHTS_BASE}/insights/`, {
@@ -276,6 +309,7 @@ const MultiAgentPanel = ({ period }) => {
       });
 
       clearTimeout(t1); clearTimeout(t2);
+      stepTimers.forEach(clearTimeout);
 
       const data = await res.json();
       const detectedIntent = data.intent || { usage: false, advice: true };
@@ -287,11 +321,18 @@ const MultiAgentPanel = ({ period }) => {
       await new Promise(r => setTimeout(r, 300)); // let node animate to 'done'
       setAgentStep('done');
       setReply({ text: data.reply || 'Analysis complete.', ok: res.ok });
-      setTrace(data.agent_trace || '');
+      
+      const finalTrace = data.agent_trace || '✅ Response returned to user.';
+      setTrace(finalTrace);
+      setLiveTraceSteps(finalTrace.split('\n'));
+      
+      setChunks(data.retrieved_chunks || []);
+      setEvaluation(data.evaluation || null);
       if (data.agent_trace) setTraceOpen(true);
 
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
+      stepTimers.forEach(clearTimeout);
       setAgentStep('idle');
       setReply({
         text: 'Could not reach the VoltStream Multi-Agent backend. Is the server running?',
@@ -433,7 +474,7 @@ const MultiAgentPanel = ({ period }) => {
               ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
               : <Send size={13} />
             }
-            {loading ? 'Running...' : 'Run Agents'}
+            {loading ? 'Processing' : 'Run'}
           </button>
         </div>
       </form>
@@ -470,41 +511,6 @@ const MultiAgentPanel = ({ period }) => {
         ))}
       </div>
 
-      {/* ── Agent trace (collapsible) ───────────────────────────────────── */}
-      {trace && (
-        <div style={{ marginTop: '14px' }}>
-          <button
-            onClick={() => setTraceOpen(o => !o)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: '8px',
-              color: '#6b7280', fontSize: '11px', fontWeight: 600,
-              padding: '5px 12px', cursor: 'pointer',
-              letterSpacing: '0.04em',
-            }}
-          >
-            ⚙️ AGENT TRACE
-            {traceOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
-          {traceOpen && (
-            <div style={{
-              marginTop: '8px',
-              padding: '12px 14px',
-              background: 'rgba(0,0,0,0.25)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '10px',
-              fontSize: '11px', lineHeight: '1.8',
-              color: '#9ca3af', fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-            }}>
-              {trace}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── Reply panel ─────────────────────────────────────────────────── */}
       {reply && (
         <div style={{
@@ -532,6 +538,94 @@ const MultiAgentPanel = ({ period }) => {
             ? <MarkdownReply text={reply.text} color="#e2e8f0" />
             : <p style={{ color: '#fca5a5', fontSize: '13px', lineHeight: '1.6' }}>{reply.text}</p>
           }
+        </div>
+      )}
+
+      {/* ── Agent trace (collapsible) ───────────────────────────────────── */}
+      {(loading || trace) && (
+        <div style={{ marginTop: '14px' }}>
+          <button
+            onClick={() => setTraceOpen(o => !o)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: '8px',
+              color: '#6b7280', fontSize: '11px', fontWeight: 600,
+              padding: '5px 12px', cursor: 'pointer',
+              letterSpacing: '0.04em',
+            }}
+          >
+            ⚙️ AGENT TRACE
+            {traceOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+          {traceOpen && (
+            <div style={{
+              marginTop: '8px',
+              padding: '12px 14px',
+              background: 'rgba(0,0,0,0.25)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: '10px',
+              fontSize: '11px', lineHeight: '1.8',
+              color: '#9ca3af', fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+            }}>
+              <div>
+                {liveTraceSteps.map((step, idx) => (
+                  <div key={idx}>{step}</div>
+                ))}
+              </div>
+              {chunks && chunks.length > 0 && !loading && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setChunksOpen(o => !o);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#06b6d4',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontFamily: 'inherit',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    📄 View Retrieved Chunks {chunksOpen ? '▼' : '▶'}
+                  </button>
+                  {chunksOpen && (
+                    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {chunks.map((chunk, idx) => (
+                        <div
+                          key={chunk.id || idx}
+                          style={{
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            borderRadius: '6px',
+                            padding: '10px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#06b6d4', fontWeight: 'bold', marginBottom: '4px', fontSize: '10px' }}>
+                            <span>Source: {chunk.source}</span>
+                            <span>Page: {chunk.page}</span>
+                          </div>
+                          <div style={{ color: '#d1d5db', fontSize: '11px', whiteSpace: 'pre-wrap', fontFamily: 'sans-serif', lineHeight: '1.5' }}>
+                            {chunk.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          )}
         </div>
       )}
 

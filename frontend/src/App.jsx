@@ -4,6 +4,7 @@ import LiveDashboard from './pages/LiveDashboard';
 import UsageHistory from './pages/UsageHistory';
 import SmartControl from './pages/SmartControl';
 import Invoices from './pages/Invoices';
+import BenchmarkResults from './pages/BenchmarkResults';
 import NotFound from './pages/NotFound';
 
 const App = () => {
@@ -14,6 +15,7 @@ const App = () => {
         <Route path='history' element={<UsageHistory />} />
         <Route path='control' element={<SmartControl />} />
         <Route path='billing' element={<Invoices />} />
+        <Route path='benchmark' element={<BenchmarkResults />} />
         <Route path='*' element={<NotFound />} />
       </Route>
     </Routes>

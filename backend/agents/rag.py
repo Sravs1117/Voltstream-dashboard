@@ -21,7 +21,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 
-from backend.core.config import Settings
+from core.config import Settings
 from core.prompts import RAG_PROMPT_TEMPLATE
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -50,6 +50,9 @@ class RAGService:
         self._llm: ChatGoogleGenerativeAI | None = None
         self._rag_chain = None
         self._initialized: bool = False
+        self.last_sources = []
+        self.last_chunks = []
+        self.last_context = ""
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -62,18 +65,18 @@ class RAGService:
             os.makedirs(self.data_dir, exist_ok=True)
             os.makedirs(self.db_dir, exist_ok=True)
 
-            pdf_path = self._find_pdf()
-            if not pdf_path:
+            pdf_paths = self._find_pdfs()
+            if not pdf_paths:
                 logger.warning(
-                    "⚠️  No PDF found in '%s'. "
-                    "Add a PDF file and restart the server.",
+                    "⚠️  No PDFs found in '%s'. "
+                    "Add PDF files and restart the server.",
                     self.data_dir,
                 )
                 return
 
-            logger.info("📄 PDF detected: %s", os.path.basename(pdf_path))
+            logger.info("📄 PDFs detected: %s", [os.path.basename(p) for p in pdf_paths])
             self._init_embedding_model()
-            self._build_vector_store(pdf_path)
+            self._build_vector_store(pdf_paths)
             self._init_llm()
             self._build_rag_chain()
 
@@ -96,10 +99,11 @@ class RAGService:
             return {
                 "answer": "I don't have that information.",
                 "sources": [],
+                "context": "",
             }
 
         try:
-            retriever = self._vector_store.as_retriever(search_kwargs={"k": 4})
+            retriever = self._vector_store.as_retriever(search_kwargs={"k": 3})
             source_docs = retriever.invoke(query)
 
             answer = self._rag_chain.invoke(query)
@@ -109,37 +113,56 @@ class RAGService:
             is_greeting = any(g in lowered_query for g in ["hi", "hello", "how are you", "hey", "good morning"])
 
             final_sources = []
+            self.last_chunks = []
             if not is_greeting:
-                final_sources = list(
-                    {
-                        f"{os.path.basename(doc.metadata.get('source', 'document'))} "
-                        f"(page {doc.metadata.get('page', '?') + 1})"
-                        for doc in source_docs
-                        if doc.metadata
-                    }
-                )
+                for idx, doc in enumerate(source_docs):
+                    meta = doc.metadata or {}
+                    raw_source = meta.get('source')
+                    if raw_source and isinstance(raw_source, str):
+                        source_name = os.path.basename(raw_source)
+                    else:
+                        source_name = "document.pdf"
+                    
+                    page_num = meta.get('page', 0) + 1
+                    
+                    self.last_chunks.append({
+                        "id": idx + 1,
+                        "source": source_name,
+                        "page": page_num,
+                        "content": doc.page_content.strip() if doc.page_content else ""
+                    })
+                    
+                    source_ref = f"{source_name} (page {page_num})"
+                    if source_ref not in final_sources:
+                        final_sources.append(source_ref)
 
-            return {"answer": answer.strip(), "sources": final_sources}
+            self.last_sources = final_sources
+            self.last_context = "\n\n---\n\n".join(doc.page_content for doc in source_docs)
+            return {
+                "answer": answer.strip(),
+                "sources": final_sources,
+                "context": self.last_context
+            }
 
         except Exception as exc:
             logger.exception("❌ RAG query failed: %s", exc)
             err_str = str(exc).lower()
             if "quota" in err_str or "429" in err_str:
-                return {"answer": "⚠️ Gemini API quota exceeded. Please wait and try again.", "sources": []}
+                return {"answer": "⚠️ Gemini API quota exceeded. Please wait and try again.", "sources": [], "context": ""}
             if "not found" in err_str or "404" in err_str:
-                return {"answer": "⚠️ Gemini model not available. Check the model name in rag_service.py.", "sources": []}
+                return {"answer": "⚠️ Gemini model not available. Check the model name in rag_service.py.", "sources": [], "context": ""}
             # Catch-all: return the real error so we can debug
             return {
                 "answer": f"⚠️ RAG error: {str(exc)[:200]}",
                 "sources": [],
+                "context": "",
             }
 
     # ── Private Helpers ────────────────────────────────────────────────────────
 
-    def _find_pdf(self) -> str | None:
-        """Returns the path of the first PDF found in data_dir, or None."""
-        pdfs = glob.glob(os.path.join(self.data_dir, "*.pdf"))
-        return pdfs[0] if pdfs else None
+    def _find_pdfs(self) -> list[str]:
+        """Returns the paths of all PDFs found in data_dir."""
+        return glob.glob(os.path.join(self.data_dir, "*.pdf"))
 
     def _init_embedding_model(self) -> None:
         """Loads the sentence-transformers embedding model (cached locally)."""
@@ -151,31 +174,67 @@ class RAGService:
         )
         logger.info("✅ Embedding model loaded.")
 
-    def _build_vector_store(self, pdf_path: str) -> None:
+    def _build_vector_store(self, pdf_paths: list[str]) -> None:
         """
-        Loads and chunks the PDF, then persists embeddings to ChromaDB.
-        Re-indexes on every startup to keep the store fresh.
+        Loads and chunks all PDFs, then persists embeddings to ChromaDB.
+        Loads existing store if present to avoid SQLite locks and speed up startup.
         """
-        logger.info("📖 Loading and chunking PDF ...")
-        loader = PyPDFLoader(pdf_path)
-        documents = loader.load()
+        import chromadb
 
+        # Try loading existing collection first to avoid SQLite locks when running multiple processes
+        try:
+            client = chromadb.PersistentClient(path=self.db_dir)
+            collections = [c.name for c in client.list_collections()]
+            if "voltstream_rag" in collections:
+                col = client.get_collection("voltstream_rag")
+                if col.count() > 0:
+                    logger.info("💾 Loading existing ChromaDB collection 'voltstream_rag'...")
+                    self._vector_store = Chroma(
+                        persist_directory=self.db_dir,
+                        embedding_function=self._embedding_model,
+                        collection_name="voltstream_rag"
+                    )
+                    logger.info("✅ Existing ChromaDB collection loaded.")
+                    return
+        except Exception as e:
+            logger.warning("Failed to load existing ChromaDB collection: %s. Rebuilding...", e)
+
+        # Rebuild vector store from scratch
+        try:
+            client = chromadb.PersistentClient(path=self.db_dir)
+            try:
+                client.delete_collection("voltstream_rag")
+                logger.info("Deleted existing Chroma collection 'voltstream_rag'")
+            except Exception:
+                pass # collection might not exist
+        except Exception as e:
+            logger.warning("Failed to clear ChromaDB collection: %s", e)
+
+        logger.info("📖 Loading and chunking PDFs ...")
+        all_chunks = []
+        
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=100,
             separators=["\n\n", "\n", ".", " ", ""],
         )
-        chunks = splitter.split_documents(documents)
-        logger.info("✂️  Created %d chunks from %d pages.", len(chunks), len(documents))
+
+        for pdf_path in pdf_paths:
+            logger.info("📖 Loading PDF: %s", os.path.basename(pdf_path))
+            loader = PyPDFLoader(pdf_path)
+            documents = loader.load()
+            chunks = splitter.split_documents(documents)
+            all_chunks.extend(chunks)
+            logger.info("✂️  Created %d chunks from %d pages in %s.", len(chunks), len(documents), os.path.basename(pdf_path))
 
         logger.info("💾 Storing embeddings in ChromaDB at '%s' ...", self.db_dir)
         self._vector_store = Chroma.from_documents(
-            documents=chunks,
+            documents=all_chunks,
             embedding=self._embedding_model,
             persist_directory=self.db_dir,
             collection_name="voltstream_rag",
         )
-        logger.info("✅ ChromaDB populated with %d vectors.", len(chunks))
+        logger.info("✅ ChromaDB populated with %d vectors.", len(all_chunks))
 
     def _init_llm(self) -> None:
         """Initializes the Gemini 2.5 Flash LLM via LangChain."""
@@ -194,7 +253,7 @@ class RAGService:
 
     def _build_rag_chain(self) -> None:
         """Constructs the LCEL RAG chain: retriever → prompt → LLM → parser."""
-        retriever = self._vector_store.as_retriever(search_kwargs={"k": 4})
+        retriever = self._vector_store.as_retriever(search_kwargs={"k": 3})
         prompt = PromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
 
         def _format_docs(docs) -> str:
@@ -210,38 +269,61 @@ class RAGService:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 rag_service = RAGService()
-def get_energy_recommendations(query: str) -> list:
+def get_energy_recommendations(query: str) -> str:
     try:
         search_q = query.strip() if query else ""
-
-        general_keywords = ["ac", "air conditioner", "fridge", "refrigerator", "washing", "machine", "geyser", "heater", "light", "tv", "television"]
-        is_specific = any(k in search_q.lower() for k in general_keywords)
-
-        if not is_specific:
-            search_q += " energy saving tips reduce electricity consumption peak hours bill reduction"
 
         rag_result = rag_service.ask(search_q)
         answer     = rag_result.get("answer", "").strip()
 
         if not answer or "don't have that information" in answer.lower():
-            return [
-                "Set AC temperature between 24°C and 26°C to reduce cooling costs by up to 20%",
-                "Reduce usage during peak hours (7 PM – 9 PM) — shift loads to off-peak",
-                "Schedule heavy appliances (washing machine, dishwasher) after 10 PM",
-                "Enable smart automation schedules to auto-shutoff idle devices",
-                "Monitor and reduce weekend consumption patterns",
-            ]
+            return (
+                "Here are some general tips:\n"
+                "- Set AC temperature between 24°C and 26°C to reduce cooling costs by up to 20%\n"
+                "- Reduce usage during peak hours (7 PM – 9 PM) — shift loads to off-peak\n"
+                "- Schedule heavy appliances (washing machine, dishwasher) after 10 PM\n"
+                "- Enable smart automation schedules to auto-shutoff idle devices\n"
+                "- Monitor and reduce weekend consumption patterns"
+            )
 
-        lines = [l.strip() for l in answer.split("\n") if l.strip() and len(l.strip()) > 10]
-        recommendations = [l.lstrip("•-*1234567890.) ") for l in lines]
-        return recommendations[:7]
+        return answer
 
     except Exception as e:
         logger.exception("[RAG Tool] error: %s", e)
-        return [
-            "Set AC to 24–26°C",
-            "Run appliances during off-peak hours (10 PM – 6 AM)",
-            "Switch to LED lighting",
-            "Use smart power strips to eliminate standby load",
-            "Enable device scheduling via VoltStream automation",
-        ]
+        return (
+            "Error accessing knowledge base. General tips:\n"
+            "- Set AC to 24–26°C\n"
+            "- Run appliances during off-peak hours (10 PM – 6 AM)\n"
+            "- Switch to LED lighting\n"
+            "- Use smart power strips to eliminate standby load\n"
+            "- Enable device scheduling via VoltStream automation"
+        )
+
+def show_retrieved_chunks(query: str) -> None:
+    """
+    Retrieves the top 3 most relevant chunks and displays:
+    - PDF filename
+    - Page number
+    - Chunk content
+    """
+    if not rag_service._initialized or not rag_service._vector_store:
+        # Initialize if not already initialized
+        rag_service.initialize()
+        
+    if not rag_service._initialized or not rag_service._vector_store:
+        print("RAG Service not initialized.")
+        return
+        
+    retriever = rag_service._vector_store.as_retriever(search_kwargs={"k": 3})
+    source_docs = retriever.invoke(query)
+    
+    for i, doc in enumerate(source_docs, 1):
+        source_file = os.path.basename(doc.metadata.get("source", "unknown.pdf"))
+        page_num = doc.metadata.get("page", 0) + 1
+        content = doc.page_content.strip()
+        
+        print(f"Retrieved Chunk #{i}")
+        print(f"Source: {source_file}")
+        print(f"Page: {page_num}\n")
+        print(content)
+        print("---")

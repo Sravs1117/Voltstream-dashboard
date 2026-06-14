@@ -107,7 +107,7 @@ def search_energy_knowledge(
         str,
         "Input provided to the knowledge base search."
     ]
-) -> list:
+) -> str:
     """
     Search the VoltStream energy-efficiency knowledge base (PDF).
     """
@@ -122,8 +122,9 @@ analyst_agent = LlmAgent(
     name="analyst_agent",
     model="gemini-2.5-flash",
     description=(
-        "Handles all electricity usage, consumption, billing, device energy, "
-        "and historical data questions by querying the VoltStream database."
+        "Handles requests specifically asking to look up the user's personal historical electricity usage data, "
+        "consumption numbers, billing history, or personal device data from the SQL database. "
+        "DO NOT use this for general knowledge questions or energy-saving advice."
     ),
     instruction=ANALYST_AGENT_PROMPT,
     tools=[get_usage_data],
@@ -133,8 +134,8 @@ advisor_agent = LlmAgent(
     name="advisor_agent",
     model="gemini-2.5-flash",
     description=(
-        "Handles all energy-saving tips, recommendations, efficiency advice, "
-        "and appliance optimization questions using the PDF knowledge base."
+        "Handles all general knowledge questions, energy-saving tips, efficiency advice, solar power queries, "
+        "R-values, cost-effective upgrades, and recommendations using the PDF document knowledge base."
     ),
     instruction=ADVISOR_AGENT_PROMPT,
     tools=[search_energy_knowledge],

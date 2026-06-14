@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   Zap, LayoutDashboard, BarChart3, SlidersHorizontal, FileText,
-  Bell, Search
+  Bell, Search, ClipboardList
 } from 'lucide-react';
 import FloatingChat from './FloatingChat';
 
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/history', label: 'Usage History', icon: BarChart3 },
   { path: '/control', label: 'Smart Control', icon: SlidersHorizontal },
   { path: '/billing', label: 'Billing', icon: FileText },
+  // { path: '/benchmark', label: 'Evaluation Report', icon: ClipboardList },
 ];
 
 export default function Layout() {

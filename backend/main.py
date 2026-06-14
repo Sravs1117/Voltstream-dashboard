@@ -1,4 +1,45 @@
+import os
+import warnings
+
+# Globally ignore all warnings (DeprecationWarning, UserWarning, etc.)
+warnings.simplefilter("ignore")
+
+# Suppress noisy library progress bars and warnings
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import logging
+
+# Configure clean, beautiful formatting: [INFO] 12:34:56 | rag - Loaded PDF: efficiency.pdf
+class CleanFormatter(logging.Formatter):
+    def format(self, record):
+        log_time = self.formatTime(record, "%H:%M:%S")
+        level_str = f"[{record.levelname}]"
+        logger_name = record.name.split(".")[-1]
+        return f"{level_str:<7} {log_time} | {logger_name:<12} | {record.getMessage()}"
+
+handler = logging.StreamHandler()
+handler.setFormatter(CleanFormatter())
+
+# Clear default handlers to prevent duplicate output
+root_logger = logging.getLogger()
+for h in root_logger.handlers[:]:
+    root_logger.removeHandler(h)
+
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+# Suppress verbose HTTP request logs, HuggingFace Hub warnings, and SDK internals
+for noisy_logger in [
+    "httpx", "chromadb", "urllib3", "google", 
+    "google_adk", "sentence_transformers", "asyncio", "uvicorn.access"
+]:
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+for silent_logger in ["huggingface_hub", "langchain"]:
+    logging.getLogger(silent_logger).setLevel(logging.ERROR)
+
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -26,18 +67,20 @@ from db.models import PowerReading
 # Shared CRUD for seeding
 from db.crud import seed_db
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(name)s - %(message)s")
-logger = logging.getLogger(__name__)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
-        seed_db(db)
-    finally:
-        db.close()
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_db(db)
+        finally:
+            db.close()
+        logger.info("💾 Database connection initialized successfully (SQLite).")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+
     rag_service.initialize()
     telemetry_service.start()
     yield

@@ -35,6 +35,8 @@ backend/.pytest_cache/
 *presentation_guide*
 *.md
 !README.md
+!docs/
+!docs/*.md
 
 # Data files
 backend/data/
