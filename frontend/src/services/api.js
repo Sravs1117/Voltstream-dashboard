@@ -3,7 +3,7 @@ import axios from 'axios';
 // HARDCODED logic to absolutely guarantee it uses the deployed backend
 const isProd = import.meta.env.PROD;
 const baseURL = isProd 
-  ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1' 
+    ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
   : 'http://127.0.0.1:8000/api/v1';
 
 const apiClient = axios.create({
@@ -13,7 +13,7 @@ const apiClient = axios.create({
 
 // Add an interceptor to help debug the actual URL requested
 apiClient.interceptors.request.use(request => {
-  console.log('Sending API Request to:', request.baseURL + request.url);
+  // console.log('Sending API Request to:', request.baseURL + request.url);
   return request;
 });
 
@@ -49,7 +49,7 @@ export const api = {
 
   // Multi-Agent Insights (Usage History page)
   runInsights: (prompt, period = 'weekly') =>
-    apiClient.post('/insights/', { prompt, period, session_id: 'insights_session' }),
+    apiClient.post('/insights', { prompt, period, session_id: 'insights_session' }),
 };
 
 export default api;

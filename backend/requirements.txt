@@ -31,4 +31,5 @@ pymupdf                 # PyMuPDF — used by GeminiService for ad-hoc PDF parsi
 # ── Google Generative AI ──────────────────────────────────────────────────────
 google-genai            # NEW Gemini SDK — supports v1 API + gemini-2.5-flash (replaces google-generativeai)
 google-generativeai     # Kept for LangChain langchain-google-genai compatibility
+google-adk              # Provides google.adk agents/runners/sessions
 fpdf2==2.8.7            # Required for generating PDF reports in evaluate_rag.py  
