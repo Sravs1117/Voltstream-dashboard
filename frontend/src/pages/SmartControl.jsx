@@ -10,10 +10,20 @@ import api from '../services/api';
 import useApi from '../hooks/useApi';
 
 // ─── Shared base URL for the agent endpoint ───────────────────────────────────
-const isProd = import.meta.env.PROD;
-const AGENT_BASE = isProd
-  ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
-  : 'http://127.0.0.1:8000/api/v1';
+const AGENT_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
+    : 'http://127.0.0.1:8000/api/v1');
+
+// console.log('[SmartControl] env debug', {
+//   href: window.location.href,
+//   origin: window.location.origin,
+//   prod: import.meta.env.PROD,
+//   dev: import.meta.env.DEV,
+//   viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+//   agentBase: AGENT_BASE,
+// });
 
 // ─── Device icon resolver ──────────────────────────────────────────────────────
 const getDeviceIcon = (device) => {
@@ -82,6 +92,10 @@ const AgentPanel = ({ onAgentAction }) => {
     setLoading(true);
     setReply(null);
     try {
+      // console.log('[SmartControl] fetch request', {
+      //   url: `${AGENT_BASE}/agent`,
+      //   prompt: prompt.trim(),
+      // });
       const res = await fetch(`${AGENT_BASE}/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -336,7 +350,7 @@ export default function SmartControl() {
       const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       activeRules.forEach(rule => {
         if (!rule.executed && rule.time === currentTimeStr) {
-          console.log(`Executing automation: Turn ${rule.action} device ${rule.device}`);
+          // console.log(`Executing automation: Turn ${rule.action} device ${rule.device}`);
           handleToggle(rule.device, rule.action === 'on');
           setActiveRules(prev => prev.map(r => r === rule ? { ...r, executed: true } : r));
         }

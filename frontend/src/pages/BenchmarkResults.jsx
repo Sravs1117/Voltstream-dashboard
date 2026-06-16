@@ -7,10 +7,20 @@ import { jsPDF } from 'jspdf';
 
 
 // ─── Shared base URL ────────────────────────────────────────────────────────
-const isProd = import.meta.env.PROD;
-const BENCHMARK_API_BASE = isProd
-  ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
-  : 'http://127.0.0.1:8000/api/v1';
+const BENCHMARK_API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
+    : 'http://127.0.0.1:8000/api/v1');
+
+// console.log('[BenchmarkResults] env debug', {
+//   href: window.location.href,
+//   origin: window.location.origin,
+//   prod: import.meta.env.PROD,
+//   dev: import.meta.env.DEV,
+//   viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+//   benchmarkBase: BENCHMARK_API_BASE,
+// });
 
 export default function BenchmarkResults() {
   const [results, setResults] = useState([]);

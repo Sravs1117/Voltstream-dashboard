@@ -115,10 +115,20 @@ const MarkdownReply = ({ text, color }) => {
 };
 
 // ─── Shared base URL (same pattern as SmartControl) ────────────────────────
-const isProd = import.meta.env.PROD;
-const INSIGHTS_BASE = isProd
-  ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
-  : 'http://127.0.0.1:8000/api/v1';
+const INSIGHTS_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
+    : 'http://127.0.0.1:8000/api/v1');
+
+// console.log('[UsageHistory] env debug', {
+//   href: window.location.href,
+//   origin: window.location.origin,
+//   prod: import.meta.env.PROD,
+//   dev: import.meta.env.DEV,
+//   viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+//   insightsBase: INSIGHTS_BASE,
+// });
 
 // ─── Stat Card (unchanged) ──────────────────────────────────────────────────
 const StatCard = ({ title, value, subtext, trend, isPositive }) => (
@@ -298,7 +308,12 @@ const MultiAgentPanel = ({ period }) => {
     }
 
     try {
-      const res = await fetch(`${INSIGHTS_BASE}/insights/`, {
+      // console.log('[UsageHistory] fetch request', {
+      //   url: `${INSIGHTS_BASE}/insights`,
+      //   prompt: prompt.trim(),
+      //   period: period || 'weekly',
+      // });
+      const res = await fetch(`${INSIGHTS_BASE}/insights`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

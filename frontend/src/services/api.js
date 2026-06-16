@@ -1,10 +1,19 @@
 import axios from 'axios';
 
-// HARDCODED logic to absolutely guarantee it uses the deployed backend
-const isProd = import.meta.env.PROD;
-const baseURL = isProd 
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
     ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
-  : 'http://127.0.0.1:8000/api/v1';
+    : 'http://127.0.0.1:8000/api/v1');
+
+// console.log('[api.js] env debug', {
+//   href: window.location.href,
+//   origin: window.location.origin,
+//   prod: import.meta.env.PROD,
+//   dev: import.meta.env.DEV,
+//   viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+//   resolvedBaseURL: baseURL,
+// });
 
 const apiClient = axios.create({
   baseURL: baseURL,
@@ -13,7 +22,12 @@ const apiClient = axios.create({
 
 // Add an interceptor to help debug the actual URL requested
 apiClient.interceptors.request.use(request => {
-  // console.log('Sending API Request to:', request.baseURL + request.url);
+  // console.log('[api.js] axios request', {
+  //   method: request.method,
+  //   baseURL: request.baseURL,
+  //   url: request.url,
+  //   fullURL: `${request.baseURL || ''}${request.url || ''}`,
+  // });
   return request;
 });
 

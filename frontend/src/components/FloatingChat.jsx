@@ -4,10 +4,20 @@ import { X, Send, Loader2, Zap, ChevronDown, BookOpen, BrainCircuit, MessageCirc
 import axios from 'axios';
 
 // ─── Shared Base URL ─────────────────────────────────────────────────────────
-const isProd = import.meta.env.PROD;
-const API_BASE = isProd
-  ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
-  : 'http://127.0.0.1:8000/api/v1';
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? 'https://voltstream-api-883519779329.us-central1.run.app/api/v1'
+    : 'http://127.0.0.1:8000/api/v1');
+
+// console.log('[FloatingChat] env debug', {
+//   href: window.location.href,
+//   origin: window.location.origin,
+//   prod: import.meta.env.PROD,
+//   dev: import.meta.env.DEV,
+//   viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+//   apiBase: API_BASE,
+// });
 
 const ENDPOINTS = {
   ai: `${API_BASE}/chat/`,
