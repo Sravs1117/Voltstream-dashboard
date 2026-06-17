@@ -13,6 +13,7 @@ import os
 import glob
 import hashlib
 import logging
+import threading
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -50,6 +51,7 @@ class RAGService:
         self._llm: ChatGoogleGenerativeAI | None = None
         self._rag_chain = None
         self._initialized: bool = False
+        self._lock = threading.Lock()
         self.last_sources = []
         self.last_chunks = []
         self.last_context = ""
@@ -61,30 +63,33 @@ class RAGService:
         Initializes the full RAG pipeline on startup.
         Safe to call even if the PDF is not yet present.
         """
-        try:
-            os.makedirs(self.data_dir, exist_ok=True)
-            os.makedirs(self.db_dir, exist_ok=True)
-
-            pdf_paths = self._find_pdfs()
-            if not pdf_paths:
-                logger.warning(
-                    "⚠️  No PDFs found in '%s'. "
-                    "Add PDF files and restart the server.",
-                    self.data_dir,
-                )
+        with self._lock:
+            if self._initialized:
                 return
+            try:
+                os.makedirs(self.data_dir, exist_ok=True)
+                os.makedirs(self.db_dir, exist_ok=True)
 
-            logger.info("📄 PDFs detected: %s", [os.path.basename(p) for p in pdf_paths])
-            self._init_embedding_model()
-            self._build_vector_store(pdf_paths)
-            self._init_llm()
-            self._build_rag_chain()
+                pdf_paths = self._find_pdfs()
+                if not pdf_paths:
+                    logger.warning(
+                        "⚠️  No PDFs found in '%s'. "
+                        "Add PDF files and restart the server.",
+                        self.data_dir,
+                    )
+                    return
 
-            self._initialized = True
-            logger.info("✅ RAG Service initialized successfully.")
+                logger.info("📄 PDFs detected: %s", [os.path.basename(p) for p in pdf_paths])
+                self._init_embedding_model()
+                self._build_vector_store(pdf_paths)
+                self._init_llm()
+                self._build_rag_chain()
 
-        except Exception as exc:
-            logger.exception("❌ RAG Service initialization failed: %s", exc)
+                self._initialized = True
+                logger.info("✅ RAG Service initialized successfully.")
+
+            except Exception as exc:
+                logger.exception("❌ RAG Service initialization failed: %s", exc)
 
     def ask(self, query: str) -> dict:
         """
@@ -95,6 +100,10 @@ class RAGService:
                 - "answer"  (str): grounded answer or fallback message
                 - "sources" (list[str]): page-level source references
         """
+        if not self._initialized:
+            logger.info("Initializing RAG service on demand...")
+            self.initialize()
+
         if not self._initialized or not self._rag_chain:
             return {
                 "answer": "I don't have that information.",

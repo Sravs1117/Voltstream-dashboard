@@ -81,7 +81,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
 
-    rag_service.initialize()
     telemetry_service.start()
     yield
     telemetry_service.stop()
