@@ -7,6 +7,12 @@ warnings.simplefilter("ignore")
 # Suppress noisy library progress bars and warnings
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
+
+if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+    os.environ["GOOGLE_CLOUD_PROJECT"] = "project-8f12ea6a-1eb5-4330-a3b"
+if not os.environ.get("GOOGLE_CLOUD_LOCATION"):
+    os.environ["GOOGLE_CLOUD_LOCATION"] = "us-central1"
 
 import logging
 
