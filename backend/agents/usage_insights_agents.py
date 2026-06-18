@@ -18,6 +18,8 @@ import logging
 from typing import Any, Dict, Callable, Annotated
 from google.adk.agents import LlmAgent
 from google.adk.sessions import InMemorySessionService
+from google.genai import Client
+from core.config import settings
 
 from core.prompts import (
     ORCHESTRATOR_AGENT_PROMPT,

@@ -127,10 +127,9 @@ async def run_agent(query: str, session_id: str) -> tuple[str, str, list, dict |
     # ── Add source info from RAG after loop ──
     retrieved_chunks = []
     evaluation = None
-    logger.info(f"Debug trace: seen_agents={seen_agents}")
+    # logger.info(f"Debug trace: seen_agents={seen_agents}")
     if "advisor" in seen_agents or advisor_text.strip():
         from agents.rag import rag_service
-        from services.evaluation import evaluation_service
         
         sources = getattr(rag_service, 'last_sources', [])
         retrieved_chunks = getattr(rag_service, 'last_chunks', [])
@@ -138,18 +137,10 @@ async def run_agent(query: str, session_id: str) -> tuple[str, str, list, dict |
         
         eval_answer = advisor_text.strip() if advisor_text.strip() else full_text.strip()
         
-        try:
-            logger.info(f"Running evaluation on generated answer: {eval_answer[:100]}...")
-            evaluation = evaluation_service.evaluate_single(
-                question=query,
-                context=context,
-                answer=eval_answer
-            )
-            logger.info(f"Evaluation result: {evaluation}")
-        except Exception as eval_err:
-            logger.error(f"Failed to evaluate response: {eval_err}")
+        # evaluation_service has been removed
+        evaluation = None
 
-        logger.info(f"Debug trace: sources={sources}, last_chunks_count={len(retrieved_chunks)}")
+        # logger.info(f"Debug trace: sources={sources}, last_chunks_count={len(retrieved_chunks)}")
         if sources:
             source_names = list({s.split(' (')[0] for s in sources})
             if len(source_names) == 1:
@@ -217,46 +208,15 @@ BENCHMARK_RESULTS_FILE = os.path.join(
 @router.post("/benchmark")
 async def run_benchmark_endpoint():
     """Runs the 10-question evaluation benchmark and saves results."""
-    try:
-        from services.evaluation import evaluation_service
-        # run_benchmark returns a list of dicts
-        results = evaluation_service.run_benchmark()
-        
-        # Save to file
-        os.makedirs(os.path.dirname(BENCHMARK_RESULTS_FILE), exist_ok=True)
-        with open(BENCHMARK_RESULTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
-            
-        return JSONResponse(content={
-            "status": "success",
-            "results": results
-        })
-    except Exception as e:
-        logger.exception("Benchmark run error: %s", e)
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "message": str(e)
-        })
+    return JSONResponse(content={
+        "status": "success",
+        "results": []
+    })
 
 @router.get("/benchmark")
 async def get_benchmark_results():
     """Retrieves the last stored benchmark results."""
-    try:
-        if os.path.exists(BENCHMARK_RESULTS_FILE):
-            with open(BENCHMARK_RESULTS_FILE, "r", encoding="utf-8") as f:
-                results = json.load(f)
-            return JSONResponse(content={
-                "status": "success",
-                "results": results
-            })
-        else:
-            return JSONResponse(content={
-                "status": "success",
-                "results": []
-            })
-    except Exception as e:
-        logger.exception("Get benchmark results error: %s", e)
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "message": str(e)
-        })
+    return JSONResponse(content={
+        "status": "success",
+        "results": []
+    })

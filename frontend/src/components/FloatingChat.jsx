@@ -94,7 +94,7 @@ function BotAvatar() {
         boxShadow: '0 0 10px rgba(0, 207, 255, 0.15)',
       }}
     >
-      <Zap size={14} className="text-[#ffb300]" fill="#ffb300" />
+      <BrainCircuit size={14} color="#00CFFF" />
     </div>
   );
 }
@@ -226,16 +226,19 @@ export default function FloatingChat() {
   const [ragHistory, setRagHistory] = useState([makeWelcome()]);
   const [mode, setMode] = useState('ai');
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [ragLoading, setRagLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [isLight, setIsLight] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const chatRef = useRef(null);
+  const toggleRef = useRef(null);
 
   const messages = mode === 'ai' ? aiHistory : ragHistory;
-  const setMessages = mode === 'ai' ? setAiHistory : setRagHistory;
+  const loading = mode === 'ai' ? aiLoading : ragLoading;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -248,11 +251,27 @@ export default function FloatingChat() {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        isOpen &&
+        chatRef.current &&
+        !chatRef.current.contains(e.target) &&
+        toggleRef.current &&
+        !toggleRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
   const triggerWorkflow = async (text) => {
     setIsOpen(true);
     setMode('ai');
     setInput('');
-    setLoading(true);
+    setAiLoading(true);
     setAiHistory((prev) => [
       ...prev,
       { id: Date.now() + Math.random(), role: 'user', text, ts: new Date() }
@@ -292,7 +311,7 @@ export default function FloatingChat() {
         }
       ]);
     } finally {
-      setLoading(false);
+      setAiLoading(false);
     }
   };
 
@@ -315,29 +334,32 @@ export default function FloatingChat() {
     setInput('');
   };
 
-  const addMsg = (role, text, extras = {}) =>
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now() + Math.random(), role, text, ts: new Date(), ...extras },
-    ]);
-
   const handleSend = async (queryText) => {
     const text = typeof queryText === 'string' ? queryText.trim() : input.trim();
-    if (!text || loading) return;
+    if (!text) return;
 
     const currentMode = mode;
+    const isModeLoading = currentMode === 'ai' ? aiLoading : ragLoading;
+    if (isModeLoading) return;
+
     const meta = MODE[currentMode];
 
-    addMsg('user', text);
+    const userMsg = { id: Date.now() + Math.random(), role: 'user', text, ts: new Date() };
+    if (currentMode === 'ai') {
+      setAiHistory(prev => [...prev, userMsg]);
+      setAiLoading(true);
+    } else {
+      setRagHistory(prev => [...prev, userMsg]);
+      setRagLoading(true);
+    }
     setInput('');
-    setLoading(true);
 
     try {
       let data;
       if (currentMode === 'ai') {
         const formData = new FormData();
         formData.append('message', text);
-        const historyData = messages
+        const historyData = aiHistory
           .filter(m => !m.id.toString().startsWith('welcome'))
           .map(m => ({ role: m.role, text: m.text }));
         formData.append('history', JSON.stringify(historyData));
@@ -360,19 +382,44 @@ export default function FloatingChat() {
         data = res.data;
       }
 
-      addMsg('bot', data.answer, {
+      const botMsg = {
+        id: Date.now() + Math.random(),
+        role: 'bot',
+        text: data.answer,
+        ts: new Date(),
         badge: meta.badge,
         badgeClass: meta.badgeClass,
         sources: data.sources || [],
         trace: data.trace || null,
-      });
+      };
+
+      if (currentMode === 'ai') {
+        setAiHistory(prev => [...prev, botMsg]);
+      } else {
+        setRagHistory(prev => [...prev, botMsg]);
+      }
 
       if (!isOpen) setHasUnread(true);
     } catch (err) {
       const detail = err.response?.data?.detail;
-      addMsg('bot', `⚠️ ${detail || 'Unable to reach the server.'}`, { isError: true });
+      const errMsg = {
+        id: Date.now() + Math.random(),
+        role: 'bot',
+        text: `⚠️ ${detail || 'Unable to reach the server.'}`,
+        ts: new Date(),
+        isError: true
+      };
+      if (currentMode === 'ai') {
+        setAiHistory(prev => [...prev, errMsg]);
+      } else {
+        setRagHistory(prev => [...prev, errMsg]);
+      }
     } finally {
-      setLoading(false);
+      if (currentMode === 'ai') {
+        setAiLoading(false);
+      } else {
+        setRagLoading(false);
+      }
     }
   };
 
@@ -410,7 +457,7 @@ export default function FloatingChat() {
       `}</style>
 
       {/* Footer / Floating Toggle Button - Always Dark for Dashboard Context */}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-2.5">
+      <div ref={toggleRef} className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-2.5">
         <button 
           onClick={() => setIsOpen((o) => !o)} 
           style={{
@@ -451,6 +498,7 @@ export default function FloatingChat() {
 
       {isOpen && (
         <div 
+          ref={chatRef}
           className="vs-chat-open fixed bottom-20 right-6 z-[9998] flex flex-col" 
           style={{ 
             width: '380px', 
@@ -488,7 +536,7 @@ export default function FloatingChat() {
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Zap size={18} fill="#ffb300" color="#ffb300" />
+                <BrainCircuit size={18} color="#00CFFF" style={{ filter: 'drop-shadow(0 0 4px rgba(0, 207, 255, 0.5))' }} />
                 <span style={{ color: isLight ? '#0f172a' : '#00CFFF', fontWeight: 800, fontSize: '15px', letterSpacing: '-0.01em', textShadow: isLight ? 'none' : '0 0 8px rgba(0,207,255,0.4)' }}>VoltStream AI</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
