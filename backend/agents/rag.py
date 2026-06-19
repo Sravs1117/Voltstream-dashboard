@@ -128,7 +128,8 @@ class RAGService:
                     meta = doc.metadata or {}
                     raw_source = meta.get('source')
                     if raw_source and isinstance(raw_source, str):
-                        source_name = os.path.basename(raw_source)
+                        # Ensure cross-platform path handling (convert Windows backslashes)
+                        source_name = os.path.basename(raw_source.replace('\\', '/'))
                     else:
                         source_name = "document.pdf"
                     
@@ -285,28 +286,14 @@ def get_energy_recommendations(query: str) -> str:
         rag_result = rag_service.ask(search_q)
         answer     = rag_result.get("answer", "").strip()
 
-        if not answer or "don't have that information" in answer.lower():
-            return (
-                "Here are some general tips:\n"
-                "- Set AC temperature between 24°C and 26°C to reduce cooling costs by up to 20%\n"
-                "- Reduce usage during peak hours (7 PM – 9 PM) — shift loads to off-peak\n"
-                "- Schedule heavy appliances (washing machine, dishwasher) after 10 PM\n"
-                "- Enable smart automation schedules to auto-shutoff idle devices\n"
-                "- Monitor and reduce weekend consumption patterns"
-            )
+        if not answer:
+            return "I am the VoltStream Assistant. I don't have that information. I can only assist with energy efficiency document-related information."
 
         return answer
 
     except Exception as e:
         logger.exception("[RAG Tool] error: %s", e)
-        return (
-            "Error accessing knowledge base. General tips:\n"
-            "- Set AC to 24–26°C\n"
-            "- Run appliances during off-peak hours (10 PM – 6 AM)\n"
-            "- Switch to LED lighting\n"
-            "- Use smart power strips to eliminate standby load\n"
-            "- Enable device scheduling via VoltStream automation"
-        )
+        return f"Error accessing knowledge base: {str(e)}"
 
 def show_retrieved_chunks(query: str) -> None:
     """
@@ -327,7 +314,8 @@ def show_retrieved_chunks(query: str) -> None:
     source_docs = retriever.invoke(query)
     
     for i, doc in enumerate(source_docs, 1):
-        source_file = os.path.basename(doc.metadata.get("source", "unknown.pdf"))
+        raw_src = doc.metadata.get("source", "unknown.pdf")
+        source_file = os.path.basename(raw_src.replace('\\', '/'))
         page_num = doc.metadata.get("page", 0) + 1
         content = doc.page_content.strip()
         

@@ -87,6 +87,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
 
+    # Initialize RAG service on startup to prevent on-demand cold starts
+    try:
+        logger.info("📖 Initializing RAG Service on startup...")
+        rag_service.initialize()
+    except Exception as e:
+        logger.error(f"❌ RAG Service initialization failed: {e}")
+
     telemetry_service.start()
     yield
     telemetry_service.stop()

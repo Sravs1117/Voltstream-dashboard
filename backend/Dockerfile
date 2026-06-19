@@ -10,6 +10,9 @@ COPY requirements.txt .
 # Install dependencies required by the application
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download and cache the SentenceTransformers embedding model to avoid runtime downloads
+RUN python -c "from langchain_community.embeddings import HuggingFaceEmbeddings; HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')"
+
 # Copy the rest of the backend application code
 COPY . .
 

@@ -280,39 +280,16 @@ const MultiAgentPanel = ({ period }) => {
     setEvalOpen(false); // Closed initially
     setAgentStep('orchestrating');
 
-    // Timers to animate the step nodes progressively while waiting
-    const t1 = setTimeout(() => setAgentStep('analysing'), 1000);
-    const t2 = setTimeout(() => setAgentStep('advising'), 2400);
-
-    // Timers to progressively add trace steps to liveTraceSteps
+    // Timers to progressively add general, truthful loading updates to the trace
     const stepTimers = [];
-    // Removed 'energy' from isUsage because it incorrectly triggered Analyst fake trace on 'energy-saving'
-    const isUsage = /usage|cost|bill|spend|rate|consumption|device/i.test(prompt);
-    const isAdvice = /tip|save|advice|reduce|ground|heat|cool|solar/i.test(prompt) || !isUsage;
-
-    if (isUsage && isAdvice) {
-      stepTimers.push(setTimeout(() => {
-        setLiveTraceSteps(prev => [...prev, "📊 Analyst Agent — calling tool: get_usage_data()", "  ↳ Querying VoltStream SQLite database..."]);
-      }, 1000));
-      stepTimers.push(setTimeout(() => {
-        setLiveTraceSteps(prev => [...prev, "💡 Advisor Agent — calling tool: search_energy_knowledge()", "  ↳ Searching PDF knowledge base via ChromaDB..."]);
-      }, 2400));
-    } else if (isUsage) {
-      stepTimers.push(setTimeout(() => {
-        setLiveTraceSteps(prev => [...prev, "📊 Analyst Agent — calling tool: get_usage_data()", "  ↳ Querying VoltStream SQLite database..."]);
-      }, 1500));
-    } else {
-      stepTimers.push(setTimeout(() => {
-        setLiveTraceSteps(prev => [...prev, "💡 Advisor Agent — calling tool: search_energy_knowledge()", "  ↳ Searching PDF knowledge base via ChromaDB..."]);
-      }, 1500));
-    }
+    stepTimers.push(setTimeout(() => {
+      setLiveTraceSteps(prev => [...prev, "⚙️ Routing query to specialized agents..."]);
+    }, 1000));
+    stepTimers.push(setTimeout(() => {
+      setLiveTraceSteps(prev => [...prev, "⏳ Processing multi-agent workflow..."]);
+    }, 2000));
 
     try {
-      // console.log('[UsageHistory] fetch request', {
-      //   url: `${INSIGHTS_BASE}/insights`,
-      //   prompt: prompt.trim(),
-      //   period: period || 'weekly',
-      // });
       const res = await fetch(`${INSIGHTS_BASE}/insights`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,17 +300,26 @@ const MultiAgentPanel = ({ period }) => {
         }),
       });
 
-      clearTimeout(t1); clearTimeout(t2);
       stepTimers.forEach(clearTimeout);
 
       const data = await res.json();
       const detectedIntent = data.intent || { usage: false, advice: true };
-
-      // Skip analysing step animation if intent is advice-only
-      if (!detectedIntent.usage) setAgentStep('advising');
-
       setIntent(detectedIntent);
-      await new Promise(r => setTimeout(r, 300)); // let node animate to 'done'
+
+      // Animate the step nodes sequentially based on the ACTUAL intent returned by the Orchestrator
+      if (detectedIntent.usage && detectedIntent.advice) {
+        setAgentStep('analysing');
+        await new Promise(r => setTimeout(r, 600));
+        setAgentStep('advising');
+        await new Promise(r => setTimeout(r, 600));
+      } else if (detectedIntent.usage) {
+        setAgentStep('analysing');
+        await new Promise(r => setTimeout(r, 800));
+      } else {
+        setAgentStep('advising');
+        await new Promise(r => setTimeout(r, 800));
+      }
+
       setAgentStep('done');
       setReply({ text: data.reply || 'Analysis complete.', ok: res.ok });
       
@@ -346,7 +332,6 @@ const MultiAgentPanel = ({ period }) => {
       if (data.agent_trace) setTraceOpen(true);
 
     } catch (err) {
-      clearTimeout(t1); clearTimeout(t2);
       stepTimers.forEach(clearTimeout);
       setAgentStep('idle');
       setReply({
